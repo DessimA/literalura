@@ -1,0 +1,64 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: literalura-postgres
+    environment:
+      POSTGRES_DB: literalura
+      POSTGRES_USER: literalura_user
+      POSTGRES_PASSWORD: literalura_pass
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - literalura-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U literalura_user -d literalura"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: literalura-app
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/literalura
+      SPRING_DATASOURCE_USERNAME: literalura_user
+      SPRING_DATASOURCE_PASSWORD: literalura_pass
+      SPRING_JPA_HIBERNATE_DDL_AUTO: update
+      SPRING_JPA_SHOW_SQL: "false"
+      SPRING_JPA_PROPERTIES_HIBERNATE_FORMAT_SQL: "true"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - literalura-network
+    stdin_open: true
+    tty: true
+
+  test:
+    image: maven:3.9-eclipse-temurin-25
+    container_name: literalura-test
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: mvn test
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/literalura
+      SPRING_DATASOURCE_USERNAME: literalura_user
+      SPRING_DATASOURCE_PASSWORD: literalura_pass
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - literalura-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  literalura-network:
+    driver: bridge
